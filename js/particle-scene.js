@@ -1,0 +1,378 @@
+// particle-scene.js
+// 将项目内 particle.html 的三维粒子场景集成到 #particles-root 容器中
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+// GLTFLoader disabled to avoid bare-specifier import issue; model loading skipped in this build.
+// If you need model loading, enable an import map or bundle GLTFLoader with three.
+
+const CONFIG = {
+    effect: "default",
+    effectMode: 0,
+    particleSize: 155,
+    particleCount: 15000, // 为了兼顾性能，调低默认粒子数；可在 CONFIG 中调整
+    uploadedImage: null,
+    uploadedModel: null,
+    shape: "default",
+    interactionMode: "auto",
+    manualControlTarget: "camera",
+    canvasColor: "#000000",
+    particleColorMode: "original",
+    customParticleColor: "#00ff66"
+};
+
+let uploadedImage = CONFIG.uploadedImage;
+let uploadedModel = CONFIG.uploadedModel;
+let particleSize = CONFIG.particleSize;
+const PARTICLE_COUNT = CONFIG.particleCount;
+let sceneData = null;
+let currentEffect = CONFIG.effect;
+let currentShape = CONFIG.shape;
+let interactionMode = CONFIG.interactionMode;
+let manualControlTarget = CONFIG.manualControlTarget;
+let effectIntensity = 0;
+let targetEffectIntensity = 0;
+let explosionTriggered = false;
+let explosionTime = 0;
+const cameraControlState = {
+    target: null,
+    yaw: 0,
+    pitch: 0,
+    distance: 45,
+    minDistance: 20,
+    maxDistance: 100,
+    isLeftDragging: false,
+    isRightDragging: false,
+    previousX: 0,
+    previousY: 0
+};
+const mouseState = { isDragging: false, previousX: 0, previousY: 0 };
+
+// shaders（与 particle.html 保持一致）
+const vertexShader = `uniform float uTime; uniform float uMorph; uniform float uPointSize; uniform int uEffectMode; uniform float uEffectIntensity; uniform float uExplosionTime; uniform float uCanvasLightness; uniform float uParticleColorMode; uniform vec3 uCustomParticleColor; attribute vec3 targetPosition; attribute vec3 targetColor; attribute vec3 color; attribute vec3 randomOffset; varying vec3 vColor; varying float vDistance; vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; } vec2 mod289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; } vec3 permute(vec3 x) { return mod289(((x * 34.0) + 1.0) * x); } float snoise(vec2 v) { const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439); vec2 i = floor(v + dot(v, C.yy)); vec2 x0 = v - i + dot(i, C.xx); vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0); vec4 x12 = x0.xyxy + C.xxzz; x12.xy -= i1; i = mod289(i); vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0)); vec3 m = max(0.5 - vec3(dot(x0, x0), dot(x12.xy, x12.xy), dot(x12.zw, x12.zw)), 0.0); m = m * m; m = m * m; vec3 x = 2.0 * fract(p * C.www) - 1.0; vec3 h = abs(x) - 0.5; vec3 ox = floor(x + 0.5); vec3 a0 = x - ox; m *= 1.79284291400159 - 0.85373472095314 * (a0 * a0 + h * h); vec3 g; g.x = a0.x * x0.x + h.x * x0.y; g.yz = a0.yz * x12.xz + h.yz * x12.yw; return 130.0 * dot(m, g); } void main() { vec3 mixedBase = mix(color, targetColor, uMorph); vColor = mix(mixedBase, uCustomParticleColor, uParticleColorMode); vec3 pos = mix(position, targetPosition, uMorph); vec3 originalPos = pos; float effectMix = uEffectIntensity; if (uEffectMode == 0) { float noise = sin(uTime * 1.5 + position.x * 0.3) * cos(uTime * 1.5 + position.y * 0.3); pos += normalize(pos) * noise * (0.2 * (1.0 - uMorph)); pos.x += sin(uTime * 0.3 + position.z) * 0.1; pos.y += cos(uTime * 0.3 + position.x) * 0.1; } else if (uEffectMode == 1) { vec3 scatterDir = normalize(pos + randomOffset * 0.5); float scatterDist = length(pos) * 0.5 + randomOffset.x * 3.0; vec3 scattered = pos + scatterDir * scatterDist * effectMix * 2.5; float turb = snoise(pos.xy * 0.3 + uTime * 0.5); scattered += vec3(turb, turb * 0.5, turb * 0.3) * effectMix * 1.5; pos = mix(originalPos, scattered, effectMix); } else if (uEffectMode == 2) { float explodeProgress = min(uExplosionTime * 2.0, 1.0); float returnProgress = max(0.0, (uExplosionTime - 0.5) * 2.0); vec3 explodeDir = normalize(pos + randomOffset); float explodeDist = (5.0 + randomOffset.x * 8.0) * sin(explodeProgress * 3.14159); vec3 exploded = originalPos + explodeDir * explodeDist * effectMix; float spin = explodeProgress * 6.28318 * (0.5 + randomOffset.y); exploded.x += cos(spin) * explodeDist * 0.3; exploded.z += sin(spin) * explodeDist * 0.3; pos = mix(originalPos, exploded, effectMix * (1.0 - returnProgress * 0.7)); } else if (uEffectMode == 3) { float angle = atan(pos.z, pos.x); float radius = length(pos.xz); float height = pos.y; float spiralSpeed = uTime * 2.0 + height * 0.3; float newAngle = angle + spiralSpeed * effectMix; float vortexPull = (1.0 - abs(height) / 20.0) * effectMix; float newRadius = radius * (1.0 - vortexPull * 0.5) + sin(uTime * 3.0 + height) * effectMix; float lift = effectMix * 5.0 * (1.0 - radius / 20.0); pos.x = cos(newAngle) * newRadius; pos.z = sin(newAngle) * newRadius; pos.y = height + lift * sin(uTime + radius); } else if (uEffectMode == 4) { float pulsePhase = uTime * 2.5; float pulseFactor = 1.0 + sin(pulsePhase) * 0.4 * effectMix; float waveFactor = sin(pulsePhase + length(pos) * 0.3) * 0.3 * effectMix; vec3 pulsed = pos * pulseFactor; pulsed += normalize(pos) * waveFactor * 3.0; float colorPulse = sin(pulsePhase * 0.5) * 0.5 + 0.5; vColor = mix(vColor, vec3(1.0, 0.4, 0.8), colorPulse * effectMix * 0.3); pos = pulsed; } else if (uEffectMode == 5) { float waveX = sin(pos.x * 0.5 + uTime * 2.0) * effectMix * 3.0; float waveZ = cos(pos.z * 0.5 + uTime * 1.5) * effectMix * 2.0; float waveY = sin(pos.x * 0.3 + pos.z * 0.3 + uTime * 2.5) * effectMix * 4.0; waveY += sin(pos.x * 0.8 - uTime * 1.8) * effectMix * 1.5; waveY += cos(pos.z * 0.6 + uTime * 1.2) * effectMix * 1.0; pos.x += waveX * 0.3; pos.y += waveY; pos.z += waveZ * 0.3; } vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0); float dist = length(pos); vDistance = dist; float sizeMultiplier = 1.0; if (uEffectMode == 2 && effectMix > 0.1) { sizeMultiplier = 1.0 + sin(uExplosionTime * 10.0) * 0.3; } if (uEffectMode == 4) { sizeMultiplier = 1.0 + sin(uTime * 2.5) * 0.2 * effectMix; } gl_PointSize = (uPointSize / -mvPosition.z) * (1.2 + sin(uTime * 3.0 + dist * 0.15) * 0.5) * sizeMultiplier; gl_Position = projectionMatrix * mvPosition; }`;
+
+const fragmentShader = `uniform float uTime; uniform float uCanvasLightness; varying vec3 vColor; varying float vDistance; void main() { float dist = distance(gl_PointCoord, vec2(0.5)); if (dist > 0.5) discard; float strength = pow(1.0 - dist * 2.0, 1.6); vec3 finalColor = vColor * 2.0; float particleLightness = dot(vColor, vec3(0.299, 0.587, 0.114)); float lightParticle = smoothstep(0.55, 0.95, particleLightness); finalColor = mix(finalColor, vColor * 0.45, uCanvasLightness * lightParticle); float alpha = strength * (0.8 + sin(vDistance * 0.3 + uTime) * 0.2); alpha = mix(alpha, min(alpha * 1.35, 1.0), uCanvasLightness); gl_FragColor = vec4(finalColor, alpha); }`;
+
+function perceptualLuminanceFromHex(colorValue) {
+    const color = new THREE.Color(colorValue);
+    return 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b;
+}
+
+function resolvePointsBlending(canvasBgHex, mode, particleCustomHex) {
+    if (perceptualLuminanceFromHex(canvasBgHex) >= 0.58) return THREE.NormalBlending;
+    if (mode === "custom" && perceptualLuminanceFromHex(particleCustomHex) < 0.45) return THREE.NormalBlending;
+    return THREE.AdditiveBlending;
+}
+
+const textureDataCache = new Map();
+function getTextureData(texture) {
+  const image = texture.image;
+  if (!image || !image.width || !image.height) return null;
+  const cacheKey = image.src || image.id || texture.uuid;
+  if (textureDataCache.has(cacheKey)) return textureDataCache.get(cacheKey);
+  const canvas = document.createElement('canvas');
+  canvas.width = image.width; canvas.height = image.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.drawImage(image, 0, 0);
+  const data = ctx.getImageData(0, 0, image.width, image.height);
+  textureDataCache.set(cacheKey, data);
+  return data;
+}
+
+function updateCameraFromState(camera) {
+    const cp = Math.cos(cameraControlState.pitch);
+    const sp = Math.sin(cameraControlState.pitch);
+    const cy = Math.cos(cameraControlState.yaw);
+    const sy = Math.sin(cameraControlState.yaw);
+    camera.position.set(
+        cameraControlState.target.x + cameraControlState.distance * sy * cp,
+        cameraControlState.target.y + cameraControlState.distance * sp,
+        cameraControlState.target.z + cameraControlState.distance * cy * cp
+    );
+    camera.lookAt(cameraControlState.target);
+}
+
+function initParticleCanvas() {
+    const container = document.getElementById("particles-root");
+    if(!container) return;
+    const width = window.innerWidth, height = window.innerHeight;
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(35, width / height, 0.1, 1000);
+    camera.position.z = 45;
+    cameraControlState.target = new THREE.Vector3(0, 0, 0);
+    updateCameraFromState(camera);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(new THREE.Color(CONFIG.canvasColor), 1);
+    container.style.backgroundColor = CONFIG.canvasColor;
+    // 清理容器内旧画布（避免重复）
+    while(container.firstChild) container.removeChild(container.firstChild);
+    container.appendChild(renderer.domElement);
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(PARTICLE_COUNT * 3);
+    const targetPositions = new Float32Array(PARTICLE_COUNT * 3);
+    const colors = new Float32Array(PARTICLE_COUNT * 3);
+    const targetColors = new Float32Array(PARTICLE_COUNT * 3);
+    const randomOffsets = new Float32Array(PARTICLE_COUNT * 3);
+    const greenColor = new THREE.Color(0x00ff66);
+    const brightWhite = new THREE.Color(0xffffff);
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const i3 = i * 3;
+        const t = (Math.random() - 0.5) * 5.0;
+        const angle = Math.random() * Math.PI * 2;
+        const radiusBase = 0.4 + Math.pow(Math.abs(t), 2.4);
+        const radius = radiusBase * (0.75 + Math.random() * 0.55);
+        let x = radius * Math.cos(angle) * 2.9;
+        let z = radius * Math.sin(angle) * 2.9;
+        let y = t * 7.5;
+        positions[i3] = x; positions[i3 + 1] = y; positions[i3 + 2] = z;
+        targetPositions[i3] = x; targetPositions[i3 + 1] = y; targetPositions[i3 + 2] = z;
+        randomOffsets[i3] = (Math.random() - 0.5) * 2;
+        randomOffsets[i3 + 1] = (Math.random() - 0.5) * 2;
+        randomOffsets[i3 + 2] = (Math.random() - 0.5) * 2;
+        const color = Math.random() > 0.7 ? greenColor : brightWhite;
+        colors[i3] = color.r; colors[i3 + 1] = color.g; colors[i3 + 2] = color.b;
+        targetColors[i3] = color.r; targetColors[i3 + 1] = color.g; targetColors[i3 + 2] = color.b;
+    }
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute("targetPosition", new THREE.BufferAttribute(targetPositions, 3));
+    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    geometry.setAttribute("targetColor", new THREE.BufferAttribute(targetColors, 3));
+    geometry.setAttribute("randomOffset", new THREE.BufferAttribute(randomOffsets, 3));
+    const customParticleColor = new THREE.Color(CONFIG.customParticleColor);
+    const material = new THREE.ShaderMaterial({
+        vertexShader, fragmentShader, transparent: true,
+        uniforms: {
+            uTime: { value: 0 },
+            uMorph: { value: 0 },
+            uPointSize: { value: particleSize },
+            uEffectMode: { value: CONFIG.effectMode },
+            uEffectIntensity: { value: 0 },
+            uExplosionTime: { value: 0 },
+            uCanvasLightness: { value: perceptualLuminanceFromHex(CONFIG.canvasColor) },
+            uParticleColorMode: { value: CONFIG.particleColorMode === "custom" ? 1 : 0 },
+            uCustomParticleColor: { value: new THREE.Vector3(customParticleColor.r, customParticleColor.g, customParticleColor.b) }
+        },
+        depthWrite: false,
+        blending: resolvePointsBlending(CONFIG.canvasColor, CONFIG.particleColorMode, CONFIG.customParticleColor)
+    });
+    const points = new THREE.Points(geometry, material);
+    scene.add(points);
+    sceneData = { scene, camera, renderer, points, geometry, material, originalPositions: positions.slice(), targetPositions, originalColors: colors.slice(), targetColors };
+
+    if (uploadedModel) processModel(uploadedModel);
+    else if (uploadedImage && uploadedImage !== '3d-model-placeholder') processImage(uploadedImage);
+    else if (currentShape && currentShape !== "default") generateShape(currentShape);
+
+    let time = 0, morphFactor = 0;
+    const effectModes = { "default": 0, "scatter": 1, "explode": 2, "vortex": 3, "pulse": 4, "wave": 5 };
+    function animate() {
+        requestAnimationFrame(animate);
+        time += 0.008;
+        if (!sceneData) return;
+        const { renderer, scene, camera, points, material } = sceneData;
+        if (interactionMode === "manual") {
+            if (manualControlTarget === "camera") {
+                updateCameraFromState(camera);
+            }
+        } else {
+            let rotationSpeed = 0.0025;
+            if (currentEffect === "vortex") rotationSpeed = 0.008 * (0.5 + effectIntensity);
+            else if (currentEffect === "explode" && explosionTriggered) rotationSpeed = 0.001;
+            points.rotation.y += rotationSpeed;
+            points.rotation.z += 0.001;
+            points.rotation.x = Math.sin(time * 0.15) * 0.12;
+        }
+        material.uniforms.uTime.value = time;
+        const targetMorph = (uploadedImage || uploadedModel) ? 1.0 : 0.0;
+        morphFactor += (targetMorph - morphFactor) * 0.05;
+        material.uniforms.uMorph.value = morphFactor;
+        effectIntensity += (targetEffectIntensity - effectIntensity) * 0.08;
+        material.uniforms.uEffectIntensity.value = effectIntensity;
+        material.uniforms.uEffectMode.value = effectModes[currentEffect] || 0;
+        if (explosionTriggered) { explosionTime += 0.016; if (explosionTime > 2.0) explosionTime = 0; }
+        material.uniforms.uExplosionTime.value = explosionTime;
+        renderer.render(scene, camera);
+    }
+    animate();
+    window.addEventListener("resize", function() {
+        if (!sceneData) return;
+        sceneData.camera.aspect = window.innerWidth / window.innerHeight;
+        sceneData.camera.updateProjectionMatrix();
+        sceneData.renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    renderer.domElement.addEventListener("mousedown", function(e) {
+        if (interactionMode === "manual" && manualControlTarget === "camera") {
+            if (e.button === 0) {
+                cameraControlState.isLeftDragging = true;
+            } else if (e.button === 2) {
+                cameraControlState.isRightDragging = true;
+            }
+            cameraControlState.previousX = e.clientX;
+            cameraControlState.previousY = e.clientY;
+        }
+        if (interactionMode === "manual" && manualControlTarget === "object") {
+            mouseState.isDragging = true;
+            mouseState.previousX = e.clientX;
+            mouseState.previousY = e.clientY;
+        }
+    });
+    window.addEventListener("mousemove", function(e) {
+        if (!sceneData) return;
+        if (interactionMode === "manual" && manualControlTarget === "camera") {
+            const deltaX = e.clientX - cameraControlState.previousX;
+            const deltaY = e.clientY - cameraControlState.previousY;
+            if (cameraControlState.isLeftDragging) {
+                cameraControlState.yaw -= deltaX * 0.005;
+                cameraControlState.pitch -= deltaY * 0.005;
+                const maxPitch = Math.PI * 0.499;
+                if (cameraControlState.pitch > maxPitch) cameraControlState.pitch = maxPitch;
+                if (cameraControlState.pitch < -maxPitch) cameraControlState.pitch = -maxPitch;
+            } else if (cameraControlState.isRightDragging) {
+                const panScale = cameraControlState.distance * 0.002;
+                const forward = new THREE.Vector3();
+                sceneData.camera.getWorldDirection(forward);
+                const right = new THREE.Vector3().crossVectors(forward, sceneData.camera.up).normalize();
+                const up = new THREE.Vector3().copy(sceneData.camera.up).normalize();
+                cameraControlState.target.addScaledVector(right, -deltaX * panScale);
+                cameraControlState.target.addScaledVector(up, deltaY * panScale);
+            }
+            cameraControlState.previousX = e.clientX;
+            cameraControlState.previousY = e.clientY;
+        }
+        if (interactionMode === "manual" && manualControlTarget === "object" && mouseState.isDragging) {
+            const deltaX = e.clientX - mouseState.previousX;
+            const deltaY = e.clientY - mouseState.previousY;
+            sceneData.points.rotation.y += deltaX * 0.005;
+            sceneData.points.rotation.x += deltaY * 0.005;
+            mouseState.previousX = e.clientX;
+            mouseState.previousY = e.clientY;
+        }
+    });
+    window.addEventListener("mouseup", function() {
+        mouseState.isDragging = false;
+        cameraControlState.isLeftDragging = false;
+        cameraControlState.isRightDragging = false;
+    });
+    renderer.domElement.addEventListener("wheel", function(e) {
+        if (interactionMode === "manual" && manualControlTarget === "camera") {
+            e.preventDefault();
+            cameraControlState.distance += e.deltaY * 0.03;
+            if (cameraControlState.distance < cameraControlState.minDistance) {
+                cameraControlState.distance = cameraControlState.minDistance;
+            }
+            if (cameraControlState.distance > cameraControlState.maxDistance) {
+                cameraControlState.distance = cameraControlState.maxDistance;
+            }
+        }
+    }, { passive: false });
+    renderer.domElement.addEventListener("contextmenu", function(e) {
+        e.preventDefault();
+    });
+    window.addEventListener("keydown", function(e) {
+        if (e.code === "Space" && !e.repeat) {
+            e.preventDefault();
+            interactionMode = interactionMode === "auto" ? "manual" : "auto";
+        }
+    });
+}
+
+function processImage(imageUrl) {
+    if (!imageUrl || !sceneData) return;
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.src = imageUrl;
+    img.onload = function() {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        const resolution = 200;
+        const aspect = img.width / img.height;
+        let drawWidth = aspect > 1 ? resolution : resolution * aspect;
+        let drawHeight = aspect > 1 ? resolution / aspect : resolution;
+        canvas.width = resolution; canvas.height = resolution;
+        const offsetX = (resolution - drawWidth) / 2;
+        const offsetY = (resolution - drawHeight) / 2;
+        ctx.fillStyle = "black"; ctx.fillRect(0, 0, resolution, resolution);
+        ctx.drawImage(img, (resolution - drawWidth) / 2, (resolution - drawHeight) / 2, drawWidth, drawHeight);
+        const imgData = ctx.getImageData(0, 0, resolution, resolution).data;
+        const validPoints = [];
+        for (let y = 0; y < resolution; y++) {
+            for (let x = 0; x < resolution; x++) {
+                const idx = (y * resolution + x) * 4;
+                const r = imgData[idx], g = imgData[idx + 1], b = imgData[idx + 2];
+                if ((r + g + b) / 3 > 15) validPoints.push({ pos: [(x / resolution - 0.5) * 38, (0.5 - y / resolution) * 38, ((r + g + b) / 765 - 0.5) * 12], col: [r / 255, g / 255, b / 255] });
+            }
+        }
+        if (validPoints.length === 0) {
+            const sampleLeft = Math.max(0, Math.floor(offsetX));
+            const sampleTop = Math.max(0, Math.floor(offsetY));
+            const sampleRight = Math.min(resolution, Math.ceil(offsetX + drawWidth));
+            const sampleBottom = Math.min(resolution, Math.ceil(offsetY + drawHeight));
+            ctx.clearRect(0, 0, resolution, resolution);
+            ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+            const fallbackData = ctx.getImageData(0, 0, resolution, resolution).data;
+            for (let y = sampleTop; y < sampleBottom; y++) {
+                for (let x = sampleLeft; x < sampleRight; x++) {
+                    const idx = (y * resolution + x) * 4;
+                    const r = fallbackData[idx], g = fallbackData[idx + 1], b = fallbackData[idx + 2], a = fallbackData[idx + 3];
+                    if (a <= 8) continue;
+                    const brightness = (r + g + b) / 3;
+                    const depthSignal = Math.max(a / 255, brightness / 255);
+                    validPoints.push({
+                        pos: [(x / resolution - 0.5) * 38, (0.5 - y / resolution) * 38, (depthSignal - 0.5) * 12],
+                        col: [r / 255, g / 255, b / 255]
+                    });
+                }
+            }
+        }
+        if (validPoints.length > 0) {
+            const { targetPositions, targetColors, geometry } = sceneData;
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                const i3 = i * 3, point = validPoints[i % validPoints.length];
+                targetPositions[i3] = point.pos[0] + (Math.random() - 0.5) * 0.4;
+                targetPositions[i3 + 1] = point.pos[1] + (Math.random() - 0.5) * 0.4;
+                targetPositions[i3 + 2] = point.pos[2] + (Math.random() - 0.5) * 1.5;
+                targetColors[i3] = point.col[0]; targetColors[i3 + 1] = point.col[1]; targetColors[i3 + 2] = point.col[2];
+            }
+            geometry.attributes.targetPosition.needsUpdate = true;
+            geometry.attributes.targetColor.needsUpdate = true;
+        }
+    };
+}
+
+function processModel(modelUrl) {
+    // GLTFLoader disabled in this build to avoid bare-specifier import errors in browsers.
+    // If model support is required, enable an import map that maps 'three' to the CDN module,
+    // or bundle GLTFLoader together with three.js. For now, skip model loading gracefully.
+    console.warn('processModel: GLTFLoader unavailable, skipping model load for', modelUrl);
+    return;
+}
+
+function generateShape(shapeName) {
+    if (!sceneData) return;
+    const { targetPositions, targetColors, geometry } = sceneData;
+    const points = [];
+    const shapeGreen = new THREE.Color(0x00ff66);
+    const shapeWhite = new THREE.Color(0xffffff);
+    switch (shapeName) {
+        case "heart": for (let i = 0; i < PARTICLE_COUNT; i++) { const t = (i / PARTICLE_COUNT) * Math.PI * 2; const u = Math.random() * Math.PI * 2; const v = Math.random() * Math.PI; const scale = 18; const x = scale * (16 * Math.pow(Math.sin(t), 3)) / 16 * Math.sin(v) * Math.cos(u); const y = scale * (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) / 16; const z = scale * (16 * Math.pow(Math.sin(t), 3)) / 16 * Math.sin(v) * Math.sin(u) * 0.8; const spread = 3.0; const color = Math.random() > 0.7 ? shapeGreen : shapeWhite; points.push({ pos: [x + (Math.random() - 0.5) * spread, y + (Math.random() - 0.5) * spread, z + (Math.random() - 0.5) * spread], col: [color.r, color.g, color.b] }); } break;
+        case "butterfly": for (let i = 0; i < PARTICLE_COUNT; i++) { const t = (i / PARTICLE_COUNT) * Math.PI * 12; const scale = 5.5; const exp = Math.exp(Math.cos(t)) - 2 * Math.cos(4 * t) - Math.pow(Math.sin(t / 12), 5); const x = Math.sin(t) * exp * scale; const y = Math.cos(t) * exp * scale; const z = (Math.random() - 0.5) * 15; const spread = 2.5; const color = Math.random() > 0.7 ? shapeGreen : shapeWhite; points.push({ pos: [x + (Math.random() - 0.5) * spread, y + (Math.random() - 0.5) * spread, z], col: [color.r, color.g, color.b] }); } break;
+        case "rose": for (let i = 0; i < PARTICLE_COUNT; i++) { const t = (i / PARTICLE_COUNT) * Math.PI * 14; const k = 5; const r = Math.cos(k * t) * 15; const h = (Math.random() - 0.5) * 20; const x = r * Math.cos(t); const y = h; const z = r * Math.sin(t); const spread = 2.0; const color = Math.random() > 0.7 ? shapeGreen : shapeWhite; points.push({ pos: [x + (Math.random() - 0.5) * spread, y, z + (Math.random() - 0.5) * spread], col: [color.r, color.g, color.b] }); } break;
+        case "cube": const cubeSize = 18; for (let i = 0; i < PARTICLE_COUNT; i++) { const face = Math.floor(Math.random() * 6); let x, y, z; const a = (Math.random() - 0.5) * cubeSize; const b = (Math.random() - 0.5) * cubeSize; switch (face) { case 0: x = cubeSize / 2; y = a; z = b; break; case 1: x = -cubeSize / 2; y = a; z = b; break; case 2: x = a; y = cubeSize / 2; z = b; break; case 3: x = a; y = -cubeSize / 2; z = b; break; case 4: x = a; y = b; z = cubeSize / 2; break; case 5: x = a; y = b; z = -cubeSize / 2; break; } const spread = 2.0; const color = Math.random() > 0.7 ? shapeGreen : shapeWhite; points.push({ pos: [x + (Math.random() - 0.5) * spread, y + (Math.random() - 0.5) * spread, z + (Math.random() - 0.5) * spread], col: [color.r, color.g, color.b] }); } break;
+        case "pyramid": const pyrHeight = 25; const pyrBase = 20; for (let i = 0; i < PARTICLE_COUNT; i++) { const onBase = Math.random() < 0.3; let x, y, z; if (onBase) { x = (Math.random() - 0.5) * pyrBase; z = (Math.random() - 0.5) * pyrBase; y = -pyrHeight / 2; } else { const t = Math.random(); const baseX = (Math.random() - 0.5) * pyrBase * (1 - t); const baseZ = (Math.random() - 0.5) * pyrBase * (1 - t); x = baseX; y = -pyrHeight / 2 + t * pyrHeight; z = baseZ; } const spread = 2.0; const color = Math.random() > 0.7 ? shapeGreen : shapeWhite; points.push({ pos: [x + (Math.random() - 0.5) * spread, y + (Math.random() - 0.5) * spread, z + (Math.random() - 0.5) * spread], col: [color.r, color.g, color.b] }); } break;
+        case "spiral": for (let i = 0; i < PARTICLE_COUNT; i++) { const t = (i / PARTICLE_COUNT) * Math.PI * 10; const r = 10 + Math.sin(t * 3) * 4; const x = r * Math.cos(t); const y = (i / PARTICLE_COUNT - 0.5) * 40; const z = r * Math.sin(t); const spread = 2.5; const color = Math.random() > 0.7 ? shapeGreen : shapeWhite; points.push({ pos: [x + (Math.random() - 0.5) * spread, y + (Math.random() - 0.5) * spread, z + (Math.random() - 0.5) * spread], col: [color.r, color.g, color.b] }); } break;
+        case "star": for (let i = 0; i < PARTICLE_COUNT; i++) { const angle = Math.random() * Math.PI * 2; const starPoints = 5; const innerR = 8; const outerR = 18; const pointAngle = Math.floor(angle / (Math.PI * 2 / starPoints)) * (Math.PI * 2 / starPoints); const t = (angle - pointAngle) / (Math.PI / starPoints); let r; if (t < 1) { r = outerR - (outerR - innerR) * t; } else { r = innerR + (outerR - innerR) * (t - 1); } const x = r * Math.cos(angle); const z = r * Math.sin(angle); const y = (Math.random() - 0.5) * 15; const spread = 2.0; const color = Math.random() > 0.7 ? shapeGreen : shapeWhite; points.push({ pos: [x + (Math.random() - 0.5) * spread, y, z + (Math.random() - 0.5) * spread], col: [color.r, color.g, color.b] }); } break;
+        case "sphere": for (let i = 0; i < PARTICLE_COUNT; i++) { const theta = Math.random() * Math.PI * 2; const phi = Math.acos(2 * Math.random() - 1); const r = 16; const x = r * Math.sin(phi) * Math.cos(theta); const y = r * Math.sin(phi) * Math.sin(theta); const z = r * Math.cos(phi); const spread = 2.5; const color = Math.random() > 0.7 ? shapeGreen : shapeWhite; points.push({ pos: [x + (Math.random() - 0.5) * spread, y + (Math.random() - 0.5) * spread, z + (Math.random() - 0.5) * spread], col: [color.r, color.g, color.b] }); } break;
+        case "dna": for (let i = 0; i < PARTICLE_COUNT; i++) { const t = (i / PARTICLE_COUNT) * Math.PI * 8; const y = (i / PARTICLE_COUNT - 0.5) * 45; const r = 10; const strand = i % 3; let x, z; if (strand === 0) { x = r * Math.cos(t); z = r * Math.sin(t); } else if (strand === 1) { x = r * Math.cos(t + Math.PI); z = r * Math.sin(t + Math.PI); } else { const barPos = Math.random(); x = r * Math.cos(t) * (1 - barPos) + r * Math.cos(t + Math.PI) * barPos; z = r * Math.sin(t) * (1 - barPos) + r * Math.sin(t + Math.PI) * barPos; } const spread = 2.0; const color = Math.random() > 0.7 ? shapeGreen : shapeWhite; points.push({ pos: [x + (Math.random() - 0.5) * spread, y + (Math.random() - 0.5) * spread, z + (Math.random() - 0.5) * spread], col: [color.r, color.g, color.b] }); } break;
+        case "infinity": const infScale = 25; for (let i = 0; i < PARTICLE_COUNT; i++) { const t = (i / PARTICLE_COUNT) * Math.PI * 6; const denom = 1 + Math.sin(t) * Math.sin(t); let x = infScale * Math.cos(t) / denom; let y = infScale * Math.sin(t) * Math.cos(t) / denom; const verticalSpread = (Math.random() - 0.5) * 20; const z = (Math.random() - 0.5) * 15 + Math.sin(t * 2) * 5; const thickness = 4.0; const offsetX = (Math.random() - 0.5) * thickness; const offsetY = (Math.random() - 0.5) * thickness + verticalSpread * 0.3; const offsetZ = (Math.random() - 0.5) * thickness; const color = Math.random() > 0.7 ? shapeGreen : shapeWhite; points.push({ pos: [x + offsetX, y + offsetY, z + offsetZ], col: [color.r, color.g, color.b] }); } break;
+    }
+    if (points.length > 0) {
+        for (let i = 0; i < PARTICLE_COUNT; i++) { const i3 = i * 3; const point = points[i % points.length]; targetPositions[i3] = point.pos[0]; targetPositions[i3 + 1] = point.pos[1]; targetPositions[i3 + 2] = point.pos[2]; targetColors[i3] = point.col[0]; targetColors[i3 + 1] = point.col[1]; targetColors[i3 + 2] = point.col[2]; }
+        geometry.attributes.targetPosition.needsUpdate = true;
+        geometry.attributes.targetColor.needsUpdate = true;
+        uploadedImage = "shape";
+    }
+}
+
+initParticleCanvas();

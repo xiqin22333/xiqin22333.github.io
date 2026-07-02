@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>个人主页 - Particleify 演示</title>
+  <link rel="stylesheet" href="./css/styles.css">
+</head>
+<body>
+<!-- 粒子容器（永久底层） -->
+<div id="particles-root" class="particles-root" aria-hidden="true"></div>
+<!-- 页面背景图层 -->
+<div id="bg-layer" class="bg-layer"></div>
+
+<!-- 首屏左上角文字 -->
+<div class="intro-top-left">你的名字</div>
+
+<!-- 首屏引导：开屏显示，下滑后自动隐藏 -->
+<div class="intro-guide">
+  <h1 class="intro-title">欢迎来到我的主页</h1>
+  <p class="intro-subtitle">原生前端 · 粒子视觉 · 轻量静态站点</p>
+  <div class="scroll-hint">
+    <span>向下滑动开始探索</span>
+    <div class="scroll-arrow">↓</div>
+  </div>
+</div>
+
+<!-- 侧边栏：图标导航，悬停展开文字，滚动后显示 -->
+<aside id="sidebar" class="sidebar scroll-hide" aria-hidden="false">
+  <nav class="nav">
+    <ul>
+      <li>
+        <a href="#about">
+          <span class="nav-icon">👤</span>
+          <span class="nav-text">关于</span>
+        </a>
+      </li>
+      <li>
+        <a href="#projects">
+          <span class="nav-icon">📁</span>
+          <span class="nav-text">项目</span>
+        </a>
+      </li>
+      <li>
+        <a href="#contact">
+          <span class="nav-icon">✉️</span>
+          <span class="nav-text">联系</span>
+        </a>
+      </li>
+      <li>
+        <button id="open-settings" class="btn-link">
+          <span class="nav-icon">⚙️</span>
+          <span class="nav-text">设置</span>
+        </button>
+      </li>
+    </ul>
+  </nav>
+  <div class="sidebar-footer">© 2026 你的名字</div>
+</aside>
+
+<main class="container scroll-hide">
+  <section class="hero">
+    <h1 class="title">你好，我是 <span id="typed-text"></span><span class="cursor">|</span></h1>
+    <p class="subtitle">原生 HTML / CSS / JS 静态个人主页 · Particleify 粒子背景</p>
+    <h2 class="particle-scene-title">Neural Particle - Default Effect</h2>
+    <p class="particle-scene-desc">基于粒子场景的视觉演示，已适配当前站点并由 Particleify 驱动。</p>
+  </section>
+
+  <section id="projects" class="projects">
+    <h2>项目展示</h2>
+    <div class="cards" id="project-cards">
+      <!-- 项目卡片由 JS 填充 -->
+    </div>
+  </section>
+
+  <section id="about" class="about">
+    <h2>关于我</h2>
+    <p>这里写简介。页面支持多套壁纸一键切换、毛玻璃强度与背景亮度开关、悬浮 Live2D 看板娘。</p>
+  </section>
+
+  <section id="contact" class="contact">
+    <h2>联系</h2>
+    <p>Email: <a href="mailto:your@example.com">your@example.com</a></p>
+  </section>
+</main>
+
+<!-- 设置面板：滚动后显示 -->
+<div id="settings-modal" class="modal scroll-hide" aria-hidden="true">
+  <div class="modal-mask" id="modal-mask"></div>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <h3 id="settings-title">页面设置</h3>
+    <div class="setting-row">
+      <label>毛玻璃强度：<span id="blur-value">10</span>px</label>
+      <input id="blur-range" type="range" min="0" max="30" value="10">
+    </div>
+    <div class="setting-row">
+      <label><input id="bg-dim-toggle" type="checkbox"> 背景变暗（提升阅读）</label>
+    </div>
+    <div class="setting-row">
+      <label>壁纸：</label>
+      <div id="wallpaper-list"></div>
+    </div>
+    <div class="setting-actions">
+      <button id="close-settings" class="btn">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- Live2D 看板娘容器：滚动后显示 -->
+<div id="live2d" class="live2d scroll-hide" aria-hidden="true"></div>
+
+<script src="./js/particleify.js"></script>
+<script src="./js/L2Dwidget.min.js"></script>
+<script src="./js/main.js"></script>
+</body>
+</html>
