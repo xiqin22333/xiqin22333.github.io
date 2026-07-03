@@ -5,7 +5,6 @@
 /httpRequests/
 # 已忽略包含查询文件的默认文件夹
 /queries/
-# Datasource local storage ignored files
 /dataSources/
 /dataSources.local.xml
 # IDE 配置目录（WebStorm 等 JetBrains 编辑器）
@@ -18,6 +17,3 @@ dist/
 build/
 *.log
 
-# 显式放行本地 Live2D 模型文件（确保一定不被忽略）
-!public/live2d/
-!public/live2d/**/*
