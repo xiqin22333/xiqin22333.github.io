@@ -1,6 +1,7 @@
 /*
   页面主逻辑（纯原生 JS）
   功能：粒子背景、Live2D看板娘、打字机标题、项目卡片、首屏滚动解锁
+  优化：移动端自动禁用 Live2D，不加载模型，不消耗性能
 */
 document.addEventListener('DOMContentLoaded', function () {
   // 项目配置
@@ -9,10 +10,7 @@ document.addEventListener('DOMContentLoaded', function () {
     {title:'项目 B', desc:'示例项目 B，响应式布局交互演示。', img:'./public/projects/p2.png', link:'#'},
     {title:'项目 C', desc:'示例项目 C，页面视觉效果展示。', img:'./public/projects/p3.png', link:'#'}
   ];
-
-  // 元素获取（仅保留HTML中真实存在的元素）
-  const particlesRoot = document.getElementById('particles-root');
-  const bgLayer = document.getElementById('bg-layer');
+// 元素获取（仅保留HTML中真实存在、代码用到的元素）
   const projectCards = document.getElementById('project-cards');
   const typedTextEl = document.getElementById('typed-text');
   const scrollElements = document.querySelectorAll('.scroll-hide');
@@ -50,9 +48,15 @@ document.addEventListener('DOMContentLoaded', function () {
     document.body.appendChild(script);
   })();
 
-  // ========== Live2D 看板娘【彻底修复catch报错】 ==========
+  // ========== Live2D 看板娘【移动端禁用 + 修复catch报错】 ==========
   function initLive2D() {
     if (!live2dContainer) return;
+
+    // 移动端（宽度 ≤ 900px，与CSS断点一致）直接不加载模型，隐藏容器
+    if (window.innerWidth <= 900) {
+      live2dContainer.style.display = 'none';
+      return;
+    }
 
     // 兼容两种全局变量名，避免大小写/命名差异
     const L2D = window.L2Dwidget || window.L2D_WIDGET;
