@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>个人主页 - Particleify 演示</title>
+  <link rel="icon" href="data:,">
   <link rel="stylesheet" href="./css/styles.css">
 </head>
 <body>
@@ -47,12 +48,6 @@
           <span class="nav-text">联系</span>
         </a>
       </li>
-      <li>
-        <a href="#contact">
-          <span class="nav-icon">⚙️</span>
-          <span class="nav-text">设置</span>
-        </a>
-      </li>
     </ul>
   </nav>
   <div class="sidebar-footer">© 2026 Xiqin</div>
@@ -80,31 +75,9 @@
 
   <section id="contact" class="contact">
     <h2>联系</h2>
-    <p>联系邮箱：<a href="mailto:quinnx@gmail.com">@gmail.com</a>，随时欢迎来信</p>
+    <p>联系邮箱：<a href="mailto:quinnx@gmail.com">quinnx@gmail.com</a>，随时欢迎来信</p>
   </section>
 </main>
-
-<!-- 设置面板：滚动后显示 -->
-<div id="settings-modal" class="modal scroll-hide" aria-hidden="true">
-  <div class="modal-mask" id="modal-mask"></div>
-  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-    <h3 id="settings-title">页面设置</h3>
-    <div class="setting-row">
-      <label>毛玻璃强度：<span id="blur-value">10</span>px</label>
-      <input id="blur-range" type="range" min="0" max="30" value="10">
-    </div>
-    <div class="setting-row">
-      <label><input id="bg-dim-toggle" type="checkbox"> 背景变暗（提升阅读）</label>
-    </div>
-    <div class="setting-row">
-      <label>壁纸：</label>
-      <div id="wallpaper-list"></div>
-    </div>
-    <div class="setting-actions">
-      <button id="close-settings" class="btn">关闭</button>
-    </div>
-  </div>
-</div>
 
 <!-- Live2D 看板娘容器：滚动后显示 -->
 <div id="live2d" class="live2d scroll-hide" aria-hidden="true"></div>

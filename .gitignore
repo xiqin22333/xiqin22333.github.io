@@ -8,4 +8,16 @@
 # Datasource local storage ignored files
 /dataSources/
 /dataSources.local.xml
-/idea/
+# IDE 配置目录（WebStorm 等 JetBrains 编辑器）
+.idea/
+
+# 前端项目通用忽略
+node_modules/
+.DS_Store
+dist/
+build/
+*.log
+
+# 显式放行本地 Live2D 模型文件（确保一定不被忽略）
+!public/live2d/
+!public/live2d/**/*

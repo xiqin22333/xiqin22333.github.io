@@ -3,7 +3,7 @@
   要点：
   - 层级严格控制：粒子root z:-2 → bg背景z:-1 → 首屏引导/左上角文字z:0 → 主内容z:0 → 侧边栏z:1 → 设置弹窗z:2 → live2d看板娘z:3
   - 侧边栏：无整体背景，纯图标按钮悬浮，悬停展开文字
-  - Live2D：右下角固定，自适应容器，下滑后淡入显示
+  - Live2D：右下角固定，自适应容器，下滑后淡入显示，移动端自动隐藏
   - 首屏引导：开屏居中显示欢迎语+下滑提示，解锁后自动淡出
   - 响应式自适应样式
   - 首屏逻辑：html.intro-mode 时主内容下沉、引导层显示，下滑后解锁
@@ -311,24 +311,15 @@ html.intro-mode .container{
 
 /* Live2D看板娘 最高层级 z:3 */
 .live2d{
-  position:fixed;
-  right:18px;
-  bottom:18px;
-  width:220px;
-  height:320px;
-  z-index:3;
-  pointer-events:auto;
-  user-select:none;
-  touch-action:manipulation;
-}
-/* 模型画布自适应填满容器 */
-.live2d {
   position: fixed;
-  left: 18px;
+  right: 18px;
   bottom: 18px;
   z-index: 3;
   width: 220px;
   height: 320px;
+  pointer-events:auto;
+  user-select:none;
+  touch-action:manipulation;
 }
 
 /* 基础标签样式 */
@@ -372,5 +363,8 @@ input[type="range"]{width:100%}
     width: 0;
   }
   .sidebar-footer{display: none;}
-  .live2d{width:140px;height:200px;right:12px;bottom:12px}
+  /* 移动端隐藏 Live2D 看板娘 */
+  .live2d{
+    display: none;
+  }
 }
