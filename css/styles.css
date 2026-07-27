@@ -1,7 +1,7 @@
 /*
   全站样式（纯原生 CSS）
   要点：
-  - 层级严格控制：粒子root z:-2 → bg背景z:-1 → 首屏引导/左上角文字z:0 → 主内容z:0 → 侧边栏z:1 → 设置弹窗z:2 → live2d看板娘z:3
+  - 层级严格控制：bg背景z:0 → 粒子root z:1 → 首屏引导/左上角文字/主内容z:2 → 侧边栏z:3 → 设置弹窗z:4 → live2d看板娘z:5
   - 侧边栏：无整体背景，纯图标按钮悬浮，悬停展开文字
   - Live2D：右下角固定，自适应容器，下滑后淡入显示，移动端自动隐藏
   - 首屏引导：开屏居中显示欢迎语+下滑提示，解锁后自动淡出
@@ -24,11 +24,12 @@
 html{
   overflow-x: hidden;
   overflow-y: auto;
+  background: #000;
 }
 body{
   font-family: "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft Yahei", sans-serif;
   color:var(--text);
-  background:linear-gradient(180deg,#fff,#f4f7fb);
+  background:#000;
   min-height:100vh;
   -webkit-font-smoothing:antialiased;
   -moz-osx-font-smoothing:grayscale;
@@ -36,33 +37,34 @@ body{
   overflow-x:hidden;
 }
 
-/* 粒子容器 最底层 z=-2 */
+/* 粒子容器 */
 .particles-root{
   position:fixed;
   inset:0;
-  z-index:-2;
+  z-index:1;
   pointer-events:none;
   background:transparent;
 }
 
-/* 背景图层 粒子上方 z=-1 */
+/* 背景图层 */
 .bg-layer{
   position:fixed;
   inset:0;
-  z-index:-1;
+  z-index:0;
   background-size:cover;
   background-position:center center;
+  background: #000;
   filter:brightness(calc(1 - var(--bg-dim)));
   transition:filter 300ms ease, background-image 400ms ease;
   pointer-events:none;
 }
 
-/* 左上角固定文字，首屏永久可见 z:0 */
+/* 左上角固定文字，首屏永久可见 */
 .intro-top-left{
   position:fixed;
   left:20px;
   top:20px;
-  z-index:0;
+  z-index:2;
   color:#fff;
   font-weight:600;
   text-shadow: 0 2px 8px rgba(0,0,0,0.3);
@@ -74,14 +76,14 @@ body{
   pointer-events:none;
 }
 
-/* 首屏居中引导层 z:0 */
+/* 首屏居中引导层 */
 .intro-guide {
   position: fixed;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
   text-align: center;
-  z-index: 0;
+  z-index: 2;
   color: #fff;
   transition: opacity 0.6s ease, transform 0.6s ease;
   pointer-events: none;
@@ -150,7 +152,7 @@ html:not(.intro-mode) .intro-guide {
   flex-direction:column;
   gap:10px;
   transition: width 300ms ease;
-  z-index:1;
+  z-index:3;
   overflow:hidden;
 }
 /* 鼠标悬停侧边栏展开宽度 */
@@ -229,7 +231,7 @@ html:not(.intro-mode) .intro-guide {
 /* 页面主体内容容器 z:0 */
 .container{
   position:relative;
-  z-index:0;
+  z-index:2;
   max-width:1100px;
   margin:48px auto;
   padding:28px;
@@ -280,8 +282,8 @@ html.intro-mode .container{
 /* About / Contact 区块 */
 .about, .contact{margin-top:22px;padding:14px;background:rgba(255,255,255,0.5);border-radius:12px;backdrop-filter:blur(calc(var(--glass-blur) / 2));color:var(--text)}
 
-/* 设置弹窗 z:2 */
-.modal{position:fixed;inset:0;z-index:2;display:none}
+/* 设置弹窗 */
+.modal{position:fixed;inset:0;z-index:4;display:none}
 .modal[aria-hidden="false"]{display:block}
 .modal-mask{position:absolute;inset:0;background:rgba(11,18,28,0.35);backdrop-filter:blur(4px)}
 .modal-panel{
@@ -314,7 +316,7 @@ html.intro-mode .container{
   position: fixed;
   right: 18px;
   bottom: 18px;
-  z-index: 3;
+  z-index: 5;
   width: 220px;
   height: 320px;
   pointer-events:auto;

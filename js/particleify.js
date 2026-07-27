@@ -2,7 +2,7 @@
   Particleify — 轻量自研粒子系统（纯原生 JS，无外部依赖）
   要点：
   - 将画布注入到指定容器（容器应设置 pointer-events:none，以便鼠标穿透）
-  - 简单粒子：圆点带连线、渐隐、响应窗口尺寸
+  - 粒子连线：点状粒子、邻近连线、渐隐、响应窗口尺寸
   - API: Particleify.init(containerElement, options)
   - 默认不依赖鼠标（因为 container pointer-events:none），如需启用交互，可在 options.mouseInteractive = true 并移除容器 pointer-events:none
 */
@@ -15,6 +15,7 @@
     this.opts = {};
     this.raf = null;
     this.mouse = {x:null,y:null};
+    this.time = 0;
   }
 
   Particleify.prototype._resize = function(){
@@ -30,21 +31,25 @@
       this.particles.push({
         x: this._rand(0,this.w),
         y: this._rand(0,this.h),
-        vx: this._rand(-0.3,0.3),
-        vy: this._rand(-0.3,0.3),
-        r: this._rand(0.8,2.2),
-        alpha: this._rand(0.3,0.9)
+        vx: this._rand(-0.16,0.16),
+        vy: this._rand(-0.16,0.16),
+        r: this._rand(0.8,2.0),
+        alpha: this._rand(0.25,0.85),
+        seed: this._rand(0, Math.PI * 2)
       });
     }
   };
 
   Particleify.prototype._step = function(){
     const ctx = this.ctx;
+    this.time += 1;
     ctx.clearRect(0,0,this.w,this.h);
     // 背景透明，粒子颜色可配置
     const color = this.opts.color || '200,220,255';
     // 更新与绘制
     for(let p of this.particles){
+      p.vx += Math.sin(this.time * 0.001 + p.seed) * 0.003;
+      p.vy += Math.cos(this.time * 0.0012 + p.seed * 1.7) * 0.003;
       p.x += p.vx;
       p.y += p.vy;
       if(p.x < -10) p.x = this.w + 10;
@@ -58,17 +63,16 @@
       ctx.fill();
     }
 
-    // 连线（简单 O(n^2) 层级，粒子数限制为低值保证性能）
-    const maxDist = this.opts.linkDistance || 120;
+    const maxDist = this.opts.linkDistance || 125;
     for(let i=0;i<this.particles.length;i++){
       for(let j=i+1;j<this.particles.length;j++){
         const a = this.particles[i], b = this.particles[j];
         const dx = a.x - b.x, dy = a.y - b.y;
         const d2 = dx*dx + dy*dy;
         if(d2 < maxDist*maxDist){
-          const alpha = Math.max(0, 0.6 - (d2 / (maxDist*maxDist)));
+          const alpha = Math.max(0, 0.45 - (d2 / (maxDist*maxDist)));
           ctx.beginPath();
-          ctx.strokeStyle = `rgba(${color},${alpha * 0.8})`;
+          ctx.strokeStyle = `rgba(${color},${alpha})`;
           ctx.lineWidth = 1;
           ctx.moveTo(a.x,a.y);
           ctx.lineTo(b.x,b.y);
@@ -92,8 +96,8 @@
 
     // 轻微风阻
     for(let p of this.particles){
-      p.vx *= 0.995;
-      p.vy *= 0.995;
+      p.vx *= 0.993;
+      p.vy *= 0.993;
     }
 
     // 循环
@@ -127,7 +131,8 @@
     this.ctx = canvas.getContext('2d');
 
     this._resize();
-    window.addEventListener('resize', this._resize.bind(this));
+    this._onResize = this._resize.bind(this);
+    window.addEventListener('resize', this._onResize);
 
     this._createParticles(this.opts.count);
 
@@ -143,6 +148,7 @@
 
     // 启动动画
     if(this.raf) window.cancelAnimationFrame(this.raf);
+    this.time = 0;
     this._step();
     return this;
   };
@@ -150,7 +156,7 @@
   Particleify.prototype.destroy = function(){
     if(this.raf) window.cancelAnimationFrame(this.raf);
     if(this.canvas && this.canvas.parentNode) this.canvas.parentNode.removeChild(this.canvas);
-    window.removeEventListener('resize', this._resize);
+    if (this._onResize) window.removeEventListener('resize', this._onResize);
   };
 
   // 导出单例工厂
