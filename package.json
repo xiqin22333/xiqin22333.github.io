@@ -1,0 +1,18 @@
+{
+  "name": "io",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "live-server --port=8000 --host=127.0.0.1",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xiqin22333/xiqin22333.github.io.git"
+  },
+  "private": true,
+  "devDependencies": {
+    "live-server": "^1.2.2"
+  }
+}
